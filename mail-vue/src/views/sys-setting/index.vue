@@ -106,32 +106,6 @@
                                    :step="0.01" :max="1" :min="0"/>
                 </div>
               </div>
-              <div class="setting-item personalized">
-                <div><span>{{ $t('loginBackground') }}</span></div>
-                <div>
-                  <el-image
-                      class="background"
-                      :src="cvtR2Url(setting.background)"
-                      :preview-src-list="[cvtR2Url(setting.background)]"
-                      show-progress
-                      fit="cover"
-                  >
-                    <template #error>
-                      <div class="error-image">
-                        <Icon icon="ph:image" width="24" height="24"/>
-                      </div>
-                    </template>
-                  </el-image>
-                  <div class="background-btn">
-                    <el-button class="opt-button" size="small" type="primary" @click="openSetBackground">
-                      <Icon icon="lsicon:edit-outline" width="16" height="16"/>
-                    </el-button>
-                    <el-button class="opt-button" size="small" type="primary" @click="delBackground">
-                      <Icon icon="material-symbols:delete-outline-rounded" width="16" height="16"/>
-                    </el-button>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 

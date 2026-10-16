@@ -1,5 +1,5 @@
 <template>
-  <el-container class="layout">
+  <el-container class="layout" :class="{ 'layout-dark': uiStore.dark }">
     <el-aside
         class="aside"
         :class="uiStore.asideShow ? 'aside-show' : 'el-aside-hide'">
@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-:global(.dark) .layout {
+.layout.layout-dark {
   --aside-backgound: #191d1b;
   --aside-menu-active-background: #263d34;
   --el-color-primary: #63c9af;
