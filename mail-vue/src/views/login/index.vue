@@ -1,21 +1,24 @@
 <template>
   <div id="login-box" :style=" background ? 'background: var(--el-bg-color)' : ''" v-loading="oauthLoading" element-loading-text="登录中...">
-    <div id="background-wrap" v-if="!settingStore.settings.background">
-      <div class="x1 cloud"></div>
-      <div class="x2 cloud"></div>
-      <div class="x3 cloud"></div>
-      <div class="x4 cloud"></div>
-      <div class="x5 cloud"></div>
+    <div class="login-slideshow" aria-hidden="true">
+      <picture v-for="(slide, index) in slides" :key="slide" class="background-slide" :class="{ active: activeSlide === index }">
+        <img :src="slide" alt="" :fetchpriority="index === 0 ? 'high' : 'auto'" />
+      </picture>
     </div>
-    <div v-else :style="background"></div>
     <div class="form-wrapper">
       <div class="container">
+        <div class="brand-mark" aria-hidden="true">
+          <Icon icon="mingcute:mail-line" width="30" height="30" />
+        </div>
         <span class="form-title">{{ settingStore.settings.title }}</span>
         <span class="form-desc" v-if="show === 'login'">{{ $t('loginTitle') }}</span>
         <span class="form-desc" v-else>{{ $t('regTitle') }}</span>
         <div v-show="show === 'login'">
           <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="form.email"
                     type="text" :placeholder="$t('emailAccount')" autocomplete="off" @keyup.enter="submit">
+            <template #prefix>
+              <Icon icon="mingcute:user-3-line" width="18" height="18" />
+            </template>
             <template #append v-if="!hideLoginDomain">
               <div @click.stop="openSelect">
                 <el-select
@@ -39,7 +42,10 @@
               </div>
             </template>
           </el-input>
-          <el-input v-model="form.password" :placeholder="$t('password')" type="password" autocomplete="off" @keyup.enter="submit">
+          <el-input v-model="form.password" :placeholder="$t('password')" type="password" show-password autocomplete="off" @keyup.enter="submit">
+            <template #prefix>
+              <Icon icon="mingcute:lock-line" width="18" height="18" />
+            </template>
           </el-input>
           <el-button class="btn" type="primary" @click="submit" :loading="loginLoading"
           >{{ $t('loginBtn') }}
@@ -144,16 +150,13 @@
         </el-button>
       </div>
     </el-dialog>
-    <a v-show="settingStore.settings.projectLink" class="github" href="https://github.com/maillab/cloud-mail">
-      <Icon icon="mingcute:github-line" color="#1890ff" width="20" height="20" />
-    </a>
   </div>
 </template>
 
 <script setup>
 import router from "@/router";
 import {useRoute} from "vue-router";
-import {computed, nextTick, reactive, ref} from "vue";
+import {computed, nextTick, onMounted, onUnmounted, reactive, ref} from "vue";
 import {login} from "@/request/login.js";
 import {register} from "@/request/login.js";
 import {websiteConfig} from "@/request/setting.js";
@@ -180,6 +183,34 @@ const bindLoading = ref(false)
 const oauthLoading = ref(false);
 const showBindForm = ref(false);
 const show = ref('login')
+const activeSlide = ref(0)
+const imageFiles = import.meta.glob('/public/image/login/*.{jpg,jpeg,png,webp,avif}', {eager: true, query: '?url', import: 'default'})
+const imagePaths = Object.keys(imageFiles).sort((first, second) => first.localeCompare(second, undefined, {numeric: true}))
+const mobileViewport = window.matchMedia('(max-width: 767px)')
+const isMobile = ref(mobileViewport.matches)
+const slides = computed(() => imagePaths
+    .filter(path => path.split('/').pop().startsWith(isMobile.value ? 'mobile-' : 'desktop-'))
+  .map(path => `${import.meta.env.BASE_URL}${path.slice('/public/'.length)}`))
+const updateViewport = (event) => {
+  isMobile.value = event.matches
+  activeSlide.value = 0
+}
+let slideshowTimer
+
+onMounted(() => {
+  mobileViewport.addEventListener('change', updateViewport)
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  slideshowTimer = window.setInterval(() => {
+    if (!document.hidden && slides.value.length > 1) {
+      activeSlide.value = (activeSlide.value + 1) % slides.value.length
+    }
+  }, 8000)
+})
+
+onUnmounted(() => {
+  window.clearInterval(slideshowTimer)
+  mobileViewport.removeEventListener('change', updateViewport)
+})
 
 const oauthKeys = ['linuxdo', 'github', 'google']
 
@@ -257,8 +288,9 @@ window.loadBefore = (e) => {
 }
 
 const loginOpacity = computed(() => {
-  const opacity = settingStore.settings.loginOpacity
-  return uiStore.dark ? `rgba(0, 0, 0, ${opacity})` : `rgba(255, 255, 255, ${opacity})`
+  const configuredOpacity = Number(settingStore.settings.loginOpacity ?? 1)
+  const opacity = Number.isFinite(configuredOpacity) ? Math.min(0.60, Math.max(0.54, configuredOpacity)) : 0.60
+  return uiStore.dark ? `rgba(24, 28, 27, ${opacity})` : `rgba(255, 255, 255, ${opacity})`
 })
 
 const hideLoginDomain = computed(() => settingStore.settings.loginDomain === 1)
@@ -633,9 +665,12 @@ function submitRegister() {
 <style lang="scss" scoped>
 
 .form-wrapper {
-  position: fixed;
-  right: 0;
-  height: 100%;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 64px 24px;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -647,60 +682,75 @@ function submitRegister() {
 
 .container {
   background: v-bind(loginOpacity);
-  padding-left: 40px;
-  padding-right: 40px;
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(8px) saturate(115%);
+  box-sizing: border-box;
+  padding: 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  width: 450px;
-  height: 100%;
-  border-left: 1px solid var(--login-border);
-  box-shadow: var(--el-box-shadow-light);
+  width: 440px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--el-bg-color) 65%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 16px 64px rgb(16 32 28 / 16%), 0 2px 8px rgb(16 32 28 / 6%);
+  --el-color-primary: #087f72;
+  --el-color-primary-light-3: #32998d;
+  --el-color-primary-dark-2: #06665c;
+  animation: form-enter 380ms ease-out both;
   @media (max-width: 1024px) {
-    padding: 20px 18px;
-    width: 384px;
-    margin-left: 18px;
+    padding: 36px;
   }
   @media (max-width: 767px) {
-    border: 1px solid var(--login-border);
-    padding: 20px 18px;
-    border-radius: 6px;
-    height: fit-content;
-    width: 100%;
-    margin-right: 18px;
-    margin-left: 18px;
+    padding: 30px 22px;
   }
 
   .btn {
-    height: 36px;
+    height: 46px;
     width: 100%;
     border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
   }
 
   .form-desc {
-    margin-top: 5px;
-    margin-bottom: 18px;
+    margin-top: 10px;
+    margin-bottom: 30px;
+    font-size: 13px;
+    line-height: 1.7;
+    text-align: center;
     color: var(--form-desc-color);
   }
 
   .form-title {
-    font-weight: bold;
-    font-size: 22px !important;
+    font-weight: 700;
+    font-size: 26px !important;
+    line-height: 1.35;
+    text-align: center;
+    overflow-wrap: anywhere;
   }
 
   .switch {
-    margin-top: 20px;
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid var(--el-border-color-lighter);
     text-align: center;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--el-text-color-secondary);
 
     span {
-      color: var(--login-switch-color);
+      color: var(--el-color-primary);
       cursor: pointer;
+      font-weight: 600;
     }
   }
 
   :deep(.el-input__wrapper) {
     border-radius: 6px;
     background: var(--el-bg-color);
+    padding: 1px 12px;
   }
 
   .email-input :deep(.el-input__wrapper) {
@@ -709,14 +759,27 @@ function submitRegister() {
   }
 
   .el-input {
-    height: 38px;
+    height: 46px;
     width: 100%;
     margin-bottom: 18px;
 
     :deep(.el-input__inner) {
-      height: 36px;
+      height: 44px;
     }
   }
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 22px;
+  border-radius: 8px;
+  color: #087f72;
+  background: #e5f4ef;
+  border: 1px solid #cce8df;
 }
 
 :deep(.el-select-dropdown__item) {
@@ -743,29 +806,29 @@ function submitRegister() {
   top: 6px;
 }
 
-.github {
-  position: fixed;
-  width: 35px;
-  height: 35px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  background: var(--el-bg-color);
-  bottom: 10px;
-  right: 10px;
-  z-index: 1000;
-  border: 1px solid var(--el-border-color-light);
-  box-shadow: var(--el-box-shadow-light);
-  cursor: pointer;
-}
-
 :deep(.el-input-group__append) {
   padding: 0 !important;
   padding-left: 8px !important;
   padding-right: 4px !important;
   background: var(--el-bg-color);
   border-radius: 0 8px 8px 0;
+  max-width: 185px;
+
+  > div > div:last-child {
+    display: flex;
+    align-items: center;
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .setting-icon {
+    top: 0;
+    flex-shrink: 0;
+  }
 }
 
 :deep(.el-button+.el-button) {
@@ -796,9 +859,10 @@ function submitRegister() {
 
 
 #login-box {
-  background: linear-gradient(to bottom, #2980b9, #6dd5fa, #fff);
-  font: 100% Arial, sans-serif;
-  height: 100%;
+  background: var(--el-fill-color-lighter);
+  font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  min-height: 100%;
+  height: 100dvh;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
@@ -807,9 +871,43 @@ function submitRegister() {
 }
 
 
-#background-wrap {
-  height: 100%;
-  z-index: 0;
+.login-slideshow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: var(--el-fill-color-lighter);
+}
+
+.background-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.5s ease-in-out;
+
+  &.active { opacity: 1; }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+}
+
+
+@keyframes form-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 400px) {
+  .form-wrapper { padding: 32px 14px; }
+  :deep(.el-input-group__append) { max-width: 145px; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container { animation: none; }
+  .background-slide { transition: none; }
 }
 
 @keyframes animateCloud {
