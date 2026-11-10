@@ -1000,7 +1000,7 @@ function openSetType(user) {
 }
 
 function openSetPwd(user) {
-  userForm.userId = user.userId || 0
+  userForm.userId = user.alias ? 0 : (user.userId || 0)
   userForm.email = user.alias ? user.email : ''
   setPwdShow.value = true
 }
@@ -1057,6 +1057,7 @@ function getUserList(loading = true) {
           .map(item => ({
             ...item,
             alias: true,
+            userId: 0,
             status: 0,
             isDel: 0,
             type: -1,
