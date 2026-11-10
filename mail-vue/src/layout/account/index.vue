@@ -75,7 +75,7 @@
       </div>
 
     </el-scrollbar>
-    <el-dialog v-model="showAdd" :title="$t('addAccount')">
+    <el-dialog v-model="showAdd" :title="isAdmin ? $t('addUser') : $t('addAccount')">
       <div class="container">
         <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off" @keyup.enter="submit">
           <template #append>
@@ -100,6 +100,13 @@
             </div>
           </template>
         </el-input>
+        <template v-if="isAdmin">
+          <el-input v-model="addForm.password" type="password" show-password :placeholder="$t('password')"
+                    autocomplete="new-password" @keyup.enter="submit" />
+          <el-select v-model="addForm.type" :placeholder="$t('perm')">
+            <el-option v-for="item in roleList" :key="item.roleId" :label="item.name" :value="item.roleId" />
+          </el-select>
+        </template>
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
         </el-button>
@@ -145,6 +152,7 @@ import {useUserStore} from "@/store/user.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
 import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
+import {roleSelectUse} from "@/request/role.js";
 
 const {t} = useI18n();
 const userStore = useUserStore();
@@ -154,6 +162,11 @@ const emailStore = useEmailStore();
 const showAdd = ref(false)
 const addLoading = ref(false);
 const domainList = computed(() => settingStore.domainList)
+const isAdmin = computed(() => {
+  const user = userStore.user
+  return user?.type === 0 || user?.permKeys?.includes('*')
+})
+const roleList = ref([])
 const accounts = reactive([])
 const noLoading = ref(false)
 const loading = ref(false)
@@ -172,6 +185,8 @@ let verifyErrorCount = 0
 let first = true
 const addForm = reactive({
   email: '',
+  password: '',
+  type: null,
   suffix: settingStore.domainList[0]
 })
 let skeletonRows = 10
@@ -292,6 +307,12 @@ function setAllReceive(account) {
     emailStore.sendScroll?.refreshList();
   })
 }
+
+watch(showAdd, (visible) => {
+  if (visible && isAdmin.value) {
+    roleSelectUse().then(list => { roleList.value = list })
+  }
+})
 
 
 function showNullSetting(item) {
@@ -418,14 +439,12 @@ function getAccountList() {
     accounts.push(...list)
 
     loading.value = false
-    followLoading.value = false
     first = false
   }).catch(() => {
     loading.value = false
     followLoading.value = false
   })
 }
-
 
 function submit() {
 
@@ -458,7 +477,16 @@ function submit() {
     return
   }
 
-  if (!verifyToken && (settingStore.settings.addEmailVerify === 0 || (settingStore.settings.addEmailVerify === 2 && settingStore.settings.addVerifyOpen))) {
+  if (isAdmin.value && (!addForm.password || addForm.password.length < 6 || addForm.password.length > 30)) {
+    ElMessage({
+      message: t(addForm.password ? 'pwdLengthMsg' : 'emptyPwdMsg'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  if (!isAdmin.value && !verifyToken && (settingStore.settings.addEmailVerify === 0 || (settingStore.settings.addEmailVerify === 2 && settingStore.settings.addVerifyOpen))) {
     if (!verifyShow.value) {
       verifyShow.value = true
       nextTick(() => {
@@ -484,12 +512,25 @@ function submit() {
   }
 
   addLoading.value = true
-  accountAdd(addForm.email + addForm.suffix, verifyToken).then(account => {
+  const email = addForm.email + addForm.suffix
+  const request = isAdmin.value
+      ? accountAdd({email, password: addForm.password, type: addForm.type ?? undefined})
+      : accountAdd({email, token: verifyToken})
+  request.then(account => {
     addLoading.value = false
     addForm.email = ''
-    accounts.push(account)
+    if (isAdmin.value) {
+      addForm.password = ''
+      addForm.type = null
+      accounts.splice(0, accounts.length)
+      noLoading.value = false
+      getAccountList()
+      userStore.refreshUserList()
+    } else {
+      accounts.push(account)
+    }
     verifyToken = ''
-    settingStore.settings.addVerifyOpen = account.addVerifyOpen
+    if (!isAdmin.value) settingStore.settings.addVerifyOpen = account.addVerifyOpen
     ElMessage({
       message: t('addSuccessMsg'),
       type: "success",
@@ -497,7 +538,7 @@ function submit() {
     })
     verifyShow.value = false
     showAdd.value = false
-    userStore.refreshUserInfo()
+    if (!isAdmin.value) userStore.refreshUserInfo()
   }).catch(res => {
     if (res.code === 400) {
       verifyToken = ''

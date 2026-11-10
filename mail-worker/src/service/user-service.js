@@ -325,12 +325,24 @@ const userService = {
 
 		let { email, type, password } = params;
 
-		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
-			throw new BizError(t('notEmailDomain'));
+		if (!email || !verifyUtils.isEmail(email)) {
+			throw new BizError(t('notEmail'));
+		}
+
+		if (typeof password !== 'string') {
+			throw new BizError(t('emailAndPwdEmpty'));
 		}
 
 		if (password.length < 6) {
 			throw new BizError(t('pwdMinLength'));
+		}
+
+		if (password.length > 30) {
+			throw new BizError(t('pwdLengthLimit'));
+		}
+
+		if (!c.env.domain.includes(emailUtils.getDomain(email))) {
+			throw new BizError(t('notEmailDomain'));
 		}
 
 		const accountRow = await accountService.selectByEmailIncludeDel(c, email);
@@ -344,7 +356,7 @@ const userService = {
 		}
 
 		let role;
-		if (type === undefined) {
+		if (type === undefined || type === null || type === '') {
 			role = await roleService.selectDefaultRole(c);
 			type = role?.roleId;
 		} else {

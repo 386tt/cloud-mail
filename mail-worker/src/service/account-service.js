@@ -19,7 +19,13 @@ const accountService = {
 
 		const { addEmailVerify , addEmail, manyEmail, addVerifyCount, minEmailPrefix, emailPrefixFilter } = await settingService.query(c);
 
-		let { email, token } = params;
+		let { email, token, password, type } = params;
+		const userRow = await userService.selectById(c, userId);
+		const isAdmin = userRow.email === c.env.admin;
+
+		if (isAdmin && password !== undefined) {
+			return await userService.add(c, { email, password, type });
+		}
 
 
 		if (!(addEmail === settingConst.addEmail.OPEN && manyEmail === settingConst.manyEmail.OPEN)) {
@@ -65,10 +71,9 @@ const accountService = {
 			}
 		}
 
-		const userRow = await userService.selectById(c, userId);
 		const roleRow = await roleService.selectById(c, userRow.type);
 
-		if (userRow.email !== c.env.admin) {
+		if (!isAdmin) {
 
 			if (roleRow.accountCount > 0) {
 				const userAccountCount = await accountService.countUserAccount(c, userId)

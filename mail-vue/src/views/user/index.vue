@@ -463,6 +463,7 @@ const domainList = settingStore.domainList
 
 const addForm = reactive({
   email: '',
+  type: null,
   suffix: settingStore.domainList[0],
   password: '',
   type: null,
@@ -708,6 +709,7 @@ const openSelect = () => {
 function resetAddForm() {
   addForm.email = ''
   addForm.password = ''
+  addForm.type = null
 }
 
 function openAdd() {
@@ -748,15 +750,6 @@ function submit() {
   if (addForm.password.length < 6) {
     ElMessage({
       message: t('pwdLengthMsg'),
-      type: "error",
-      plain: true
-    })
-    return
-  }
-
-  if (!addForm.type) {
-    ElMessage({
-      message: t('emptyRole'),
       type: "error",
       plain: true
     })
