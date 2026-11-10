@@ -41,7 +41,7 @@
             @cell-contextmenu="handleContextmenu"
             :cell-class-name="cellClassName"
         >
-          <el-table-column :width="expandWidth" type="selection" :selectable="row => row.type !== 0" />
+          <el-table-column :width="expandWidth" type="selection" :selectable="row => row.type !== 0 && !row.alias" />
           <el-table-column show-overflow-tooltip :tooltip-formatter="tableRowFormatter" :label="$t('tabEmailAddress')"
                            :min-width="emailWidth">
             <template #default="props">
@@ -642,6 +642,8 @@ function tableFilter(e) {
 
 function formatterSend(e) {
 
+  if (e.alias) return '-'
+
   if (filterItem.send.length === 2) {
     return e.sendEmailCount + e.delSendEmailCount
   }
@@ -658,6 +660,8 @@ function formatterSend(e) {
 }
 
 function formatterAccount(e) {
+
+  if (e.alias) return '-'
 
   if (filterItem.account.length === 2) {
     return e.accountCount + e.delAccountCount
@@ -676,6 +680,7 @@ function formatterAccount(e) {
 
 function formatterReceive(e) {
 
+  if (e.alias) return '-'
 
   if (filterItem.receive.length === 2) {
     return e.receiveEmailCount + e.delReceiveEmailCount
@@ -1049,7 +1054,20 @@ function getUserList(loading = true) {
       const registered = new Set(list.map(item => item.email.toLowerCase()))
       const extra = aliases
           .filter(item => !registered.has(item.email.toLowerCase()))
-          .map(item => ({...item, alias: true, status: 0, isDel: 0, type: -1, createTime: null}))
+          .map(item => ({
+            ...item,
+            alias: true,
+            status: 0,
+            isDel: 0,
+            type: -1,
+            createTime: null,
+            receiveEmailCount: 0,
+            sendEmailCount: 0,
+            accountCount: 0,
+            delReceiveEmailCount: 0,
+            delSendEmailCount: 0,
+            delAccountCount: 0
+          }))
       users.value = [...list, ...extra]
     }).catch(() => {})
   }).finally(() => {
