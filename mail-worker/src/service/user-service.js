@@ -20,6 +20,10 @@ import {oauth} from "../entity/oauth";
 import oauthService from "./oauth-service";
 import settingService from './setting-service';
 import starService from './star-service';
+import account from '../entity/account';
+import emailTable from '../entity/email';
+import {att} from '../entity/att';
+import {star} from '../entity/star';
 
 const userService = {
 
@@ -267,9 +271,82 @@ const userService = {
 
 	async setPwd(c, params) {
 
-		const { password, userId } = params;
+		const { password, userId, email } = params;
+
+		if (!(userId > 0) && email) {
+			const accountRow = await accountService.selectActiveByEmail(c, email);
+			if (!accountRow) {
+				throw new BizError(t('notExistUser'));
+			}
+			const exists = await this.selectByEmailIncludeDel(c, accountRow.email);
+			if (exists) {
+				await this.resetPassword(c, { password }, exists.userId);
+				await c.env.kv.delete(KvConst.AUTH_INFO + exists.userId);
+				return;
+			}
+
+			await this.upgradeAliasAccount(c, accountRow, password);
+			return;
+		}
+
 		await this.resetPassword(c, { password }, userId);
 		await c.env.kv.delete(KvConst.AUTH_INFO + userId);
+	},
+
+	async upgradeAliasAccount(c, accountRow, password) {
+
+		if (typeof password !== 'string' || password.length < 6) {
+			throw new BizError(t('pwdMinLength'));
+		}
+
+		if (password.length > 30) {
+			throw new BizError(t('pwdLengthLimit'));
+		}
+
+		const email = accountRow.email;
+		const registered = await this.selectByEmailIncludeDel(c, email);
+		if (registered) {
+			return registered.userId;
+		}
+
+		const role = await roleService.selectDefaultRole(c);
+		if (!role) {
+			throw new BizError(t('roleNotExist'));
+		}
+
+		const { salt, hash } = await saltHashUtils.hashPassword(password);
+
+		const userId = await this.insert(c, {
+			email,
+			password: hash,
+			salt,
+			type: role.roleId,
+			status: userConst.status.NORMAL
+		});
+
+		await this.updateUserInfo(c, userId, true);
+
+		await orm(c).update(account).set({ userId }).where(eq(account.accountId, accountRow.accountId)).run();
+
+		const emailIds = await orm(c).select({ emailId: emailTable.emailId })
+			.from(emailTable).where(eq(emailTable.accountId, accountRow.accountId)).all();
+
+		await orm(c).update(emailTable).set({ userId }).where(eq(emailTable.accountId, accountRow.accountId)).run();
+
+		await orm(c).update(att).set({ userId: userId })
+			.where(and(eq(att.accountId, accountRow.accountId), eq(att.userId, accountRow.userId)))
+			.run();
+
+		if (emailIds.length > 0) {
+			await orm(c).update(star).set({ userId })
+				.where(and(
+					eq(star.userId, accountRow.userId),
+					inArray(star.emailId, emailIds.map(row => row.emailId))
+				))
+				.run();
+		}
+
+		return userId;
 	},
 
 	async setStatus(c, params) {

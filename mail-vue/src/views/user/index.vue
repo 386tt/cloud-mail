@@ -74,12 +74,14 @@
                            prop="accountCount"/>
           <el-table-column v-if="createTimeShow" :label="$t('tabRegisteredAt')" min-width="160" prop="createTime">
             <template #default="props">
-              {{ tzDayjs(props.row.createTime).format('YYYY-MM-DD HH:mm') }}
+              <span v-if="props.row.alias">-</span>
+              <template v-else>{{ tzDayjs(props.row.createTime).format('YYYY-MM-DD HH:mm') }}</template>
             </template>
           </el-table-column>
           <el-table-column v-if="statusShow" min-width="60px" :label="$t('tabStatus')" prop="status">
             <template #default="props">
-              <el-tag disable-transitions v-if="props.row.isDel === 1" type="info">{{ $t('deleted') }}</el-tag>
+              <el-tag disable-transitions v-if="props.row.alias" type="warning">{{ $t('unregistered') }}</el-tag>
+              <el-tag disable-transitions v-else-if="props.row.isDel === 1" type="info">{{ $t('deleted') }}</el-tag>
               <el-tag disable-transitions v-else-if="props.row.status === 0" type="primary">{{ $t('active') }}</el-tag>
               <el-tag disable-transitions v-else-if="props.row.status === 1" type="danger">{{ $t('banned') }}</el-tag>
             </template>
@@ -99,6 +101,7 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item @click="openSetPwd(props.row)" >{{ $t('chgPwd') }}</el-dropdown-item>
+                    <template v-if="!props.row.alias">
                     <el-dropdown-item @click="openSetType(props.row)" >{{ $t('perm') }}</el-dropdown-item>
                     <template v-if="props.row.type !== 0">
                       <el-dropdown-item v-if="props.row.isDel !== 1" @click="setStatus(props.row)">
@@ -108,6 +111,7 @@
                     </template>
                     <el-dropdown-item @click="openAccountList(props.row.userId)" >{{ $t('account') }}</el-dropdown-item>
                     <el-dropdown-item @click="openDetails(props.row)" >{{ $t('details') }}</el-dropdown-item>
+                    </template>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -388,7 +392,8 @@ import {
   userRestSendCount,
   userRestore,
   userDeleteAccount,
-  userAllAccount
+  userAllAccount,
+  userAliasList
 } from '@/request/user.js'
 import {roleSelectUse} from "@/request/role.js";
 import {Icon} from "@iconify/vue";
@@ -481,6 +486,7 @@ const userForm = reactive({
   password: null,
   type: -1,
   userId: 0,
+  email: '',
 })
 
 const showAdd = ref(false)
@@ -802,6 +808,11 @@ function toRoleName(type) {
     return t('admin')
   }
 
+  if (type === -1) {
+    const defaultRole = roleList.find(role => role.isDefault)
+    return defaultRole ? defaultRole.name : ''
+  }
+
   const index = roleList.findIndex(role => role.roleId === type)
   if (index > -1) {
     return roleList[index].name
@@ -933,6 +944,7 @@ function setType() {
 function resetUserForm() {
   userForm.password = null
   userForm.userId = 0
+  userForm.email = ''
 }
 
 function search() {
@@ -963,7 +975,7 @@ function updatePwd() {
   }
 
   settingLoading.value = true
-  userSetPwd({password: userForm.password, userId: userForm.userId}).then(() => {
+  userSetPwd({password: userForm.password, userId: userForm.userId || undefined, email: userForm.email || undefined}).then(() => {
     setPwdShow.value = false
     ElMessage({
       message: t('saveSuccessMsg'),
@@ -983,7 +995,8 @@ function openSetType(user) {
 }
 
 function openSetPwd(user) {
-  userForm.userId = user.userId
+  userForm.userId = user.userId || 0
+  userForm.email = user.alias ? user.email : ''
   setPwdShow.value = true
 }
 
@@ -1025,9 +1038,20 @@ function getUserList(loading = true) {
     newParams.isDel = 1
   }
   userList(newParams).then(data => {
-    users.value = data.list.map(item => ({...item, checkedClass: ''}))
+    const list = data.list.map(item => ({...item, checkedClass: ''}))
+    users.value = list
     total.value = data.total
     scrollbarRef.value?.setScrollTop(0);
+
+    if (params.num !== 1 || params.status === -2) return
+
+    return userAliasList(params.status === -1 ? params.email : '').then(aliases => {
+      const registered = new Set(list.map(item => item.email.toLowerCase()))
+      const extra = aliases
+          .filter(item => !registered.has(item.email.toLowerCase()))
+          .map(item => ({...item, alias: true, status: 0, isDel: 0, type: -1, createTime: null}))
+      users.value = [...list, ...extra]
+    }).catch(() => {})
   }).finally(() => {
     tableLoading.value = false
     setTimeout(() => {

@@ -62,6 +62,7 @@ const zh = {
     all: '全部',
     normal: '正常',
     banned: '封禁',
+    unregistered: '未注册',
     reset: '重置',
     restore: '恢复',
     tabSetting: '设置',

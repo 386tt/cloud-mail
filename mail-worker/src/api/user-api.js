@@ -49,6 +49,11 @@ app.get('/user/allAccount', async (c) => {
 	return c.json(result.ok(data));
 });
 
+app.get('/user/aliasList', async (c) => {
+	const data = await accountService.aliasList(c, c.req.query());
+	return c.json(result.ok(data));
+});
+
 app.delete('/user/deleteAccount', async (c) => {
 	await accountService.physicsDelete(c, c.req.query());
 	return c.json(result.ok());

@@ -62,6 +62,7 @@ const en = {
     all: 'All',
     normal: 'Normal',
     banned: 'Banned',
+    unregistered: 'Unregistered',
     reset: 'Reset',
     restore: 'Restore',
     tabSetting: 'Settings',

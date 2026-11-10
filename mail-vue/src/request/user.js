@@ -38,6 +38,10 @@ export function userAllAccount(userId, num, size) {
     return http.get('/user/allAccount', {params:{userId,num,size}})
 }
 
+export function userAliasList(email) {
+    return http.get('/user/aliasList', {params: {email}})
+}
+
 export function userDeleteAccount(accountId) {
     return http.delete('/user/deleteAccount', {params:{accountId}})
 }

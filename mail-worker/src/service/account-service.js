@@ -24,6 +24,18 @@ const accountService = {
 		const isAdmin = userRow.email === c.env.admin;
 
 		if (isAdmin && password !== undefined) {
+			const existingUser = await userService.selectByEmailIncludeDel(c, email);
+			if (existingUser) {
+				await userService.setPwd(c, { password, userId: existingUser.userId });
+				return;
+			}
+
+			const aliasRow = await this.selectActiveByEmail(c, email);
+			if (aliasRow) {
+				await userService.upgradeAliasAccount(c, aliasRow, password);
+				return;
+			}
+
 			return await userService.add(c, { email, password, type });
 		}
 
@@ -185,6 +197,31 @@ const accountService = {
 			and(eq(account.accountId, accountId),
 				eq(account.isDel, isDel.NORMAL)))
 			.get();
+	},
+
+	selectActiveByEmail(c, email) {
+		return orm(c).select().from(account).where(
+			and(
+				sql`${account.email} COLLATE NOCASE = ${email}`,
+				eq(account.isDel, isDel.NORMAL)))
+			.get();
+	},
+
+	aliasList(c, params) {
+		const { email } = params;
+		const conditions = [
+			eq(account.isDel, isDel.NORMAL),
+			sql`NOT EXISTS (SELECT 1 FROM user u WHERE u.email COLLATE NOCASE = ${account.email})`
+		];
+		if (email) {
+			conditions.push(sql`${account.email} COLLATE NOCASE LIKE ${email + '%'}`);
+		}
+		return orm(c).select({
+			accountId: account.accountId,
+			email: account.email,
+			name: account.name,
+			userId: account.userId
+		}).from(account).where(and(...conditions)).orderBy(desc(account.accountId)).limit(200).all();
 	},
 
 	async insert(c, params) {
